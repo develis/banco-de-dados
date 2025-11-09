@@ -5,20 +5,22 @@ CREATE TABLE TB_Pagamento (
     DH_DataPagamento TIMESTAMP,
     VL_ValorPago DECIMAL,
     TP_MetodoPagamento VARCHAR,
-    CD_Transacao VARCHAR
+    CD_Transacao VARCHAR,
+
+	-- PRIMARY KEY
+	CONSTRAINT PK_Pagamento PRIMARY KEY (ID_Pagamento);
 );
--- PRIMARY KEY
-ALTER TABLE TB_Pagamento ADD CONSTRAINT PK_Pagamento PRIMARY KEY (ID_Pagamento);
 
 -- TABELA CERTIFICADO
 CREATE TABLE TB_Certificado (
     ID_Certificado INTEGER GENERATED ALWAYS AS IDENTITY,
     ID_Inscricao INTEGER,
     CD_Validacao VARCHAR,
-    DH_Emissao TIMESTAMP
+    DH_Emissao TIMESTAMP,
+	
+	-- PRIMARY KEY
+	CONSTRAINT PK_Certificado PRIMARY KEY (ID_Certificado);
 );
--- PRIMARY KEY
-ALTER TABLE TB_Certificado ADD CONSTRAINT PK_Certificado PRIMARY KEY (ID_Certificado);
 
 -- TABELA USUARIO
 CREATE TABLE TB_Usuario (
@@ -27,10 +29,11 @@ CREATE TABLE TB_Usuario (
     DS_Email VARCHAR,
     DS_Nome VARCHAR,
     DS_Instituicao VARCHAR,
-    DS_Escolaridade VARCHAR
+    DS_Escolaridade VARCHAR,
+	
+	-- PRIMARY KEY
+	CONSTRAINT PK_Usuario PRIMARY KEY (ID_Usuario);
 );
--- PRIMARY KEY
-ALTER TABLE TB_Usuario ADD CONSTRAINT PK_Usuario PRIMARY KEY (ID_Usuario);
 
 -- TABELA REGISTRO
 CREATE TABLE TB_Registro (
@@ -43,10 +46,10 @@ CREATE TABLE TB_Registro (
     DH_Inicio TIMESTAMP,
     DH_Fim TIMESTAMP,
     TP_Area VARCHAR,
-    ST_Submissao VARCHAR
+	
+	-- PRIMARY KEY
+	CONSTRAINT PK_Registro PRIMARY KEY (ID_Registro);
 );
--- PRIMARY KEY
-ALTER TABLE TB_Registro ADD CONSTRAINT PK_Registro PRIMARY KEY (ID_Registro);
 
 -- TABELA INSCRICAO
 CREATE TABLE TB_Inscricao (
@@ -58,9 +61,10 @@ CREATE TABLE TB_Inscricao (
     ST_Pagamento VARCHAR,
     VL_CustoInscricao DECIMAL,
     ST_Presente BOOLEAN
+	
+	-- PRIMARY KEY
+	CONSTRAINT PK_Inscricao PRIMARY KEY (ID_Inscricao);
 );
--- PRIMARY KEY
-ALTER TABLE TB_Inscricao ADD CONSTRAINT PK_Inscricao PRIMARY KEY (ID_Inscricao);
 
 -- DEFINIÇÃO DAS CONSTRAINTS
 -- FOREIGN KEY PAGAMENTO/INSCRICAO
@@ -93,3 +97,70 @@ ALTER TABLE TB_Inscricao ADD CONSTRAINT FK_Inscricao_Usuario
 ALTER TABLE TB_Inscricao ADD CONSTRAINT FK_Inscricao_Registro
     FOREIGN KEY (ID_Registro)
     REFERENCES TB_Registro (ID_Registro);
+
+-- FUNÇÃO DO TRIGGER (Implementação PL/pgSQL)
+-- Garante a regra de negócios onde um usuário só pode se inscrever em uma atividade que pertence a um evento ao qual ele já está inscrito
+CREATE FUNCTION fn_VerificarInscricaoAtividade()
+RETURNS TRIGGER AS $$
+DECLARE
+    -- Variáveis para armazenar os dados do registro (evento ou atividade)
+    v_TipoRegistro VARCHAR;
+    v_ID_Evento_Pai INT;
+    v_InscricaoPaiCount INT;
+BEGIN
+    
+    -- 1. Buscar o tipo e o pai do registro que está sendo inscrito
+    SELECT 
+        TP_Registro,
+        ID_EventoPai
+    INTO 
+        v_TipoRegistro,
+        v_ID_Evento_Pai
+    FROM 
+        TB_Registro
+    WHERE 
+        ID_Registro = NEW.ID_Registro; -- 'NEW.ID_Registro' é o ID do registro da nova inscrição
+
+-- CRIACAO DO TRIGGER
+CREATE TRIGGER trg_AntesDeInserirInscricao
+BEFORE INSERT ON TB_Inscricao
+FOR EACH ROW
+EXECUTE FUNCTION fn_VerificarInscricaoAtividade();
+    -- 2. Verificar o tipo. A regra só se aplica a 'Atividade'
+    IF v_TipoRegistro = 'Atividade' THEN
+        
+        -- 3. (Boa prática) Garantir que a atividade tem um evento pai associado
+        IF v_ID_Evento_Pai IS NULL THEN
+            RAISE EXCEPTION 'Erro de integridade de dados: A Atividade (ID: %) não possui um Evento pai (ID_EventoPai) associado.', NEW.ID_Registro;
+        END IF;
+
+        -- 4. Contar quantas inscrições o usuário (NEW.ID_Usuario) tem no evento pai (v_ID_Evento_Pai)
+        SELECT 
+            COUNT(*)
+        INTO
+            v_InscricaoPaiCount
+        FROM 
+            TB_Inscricao
+        WHERE 
+            ID_Usuario = NEW.ID_Usuario      -- O mesmo usuário
+            AND ID_Registro = v_ID_Evento_Pai; -- O evento pai da atividade
+
+        -- 5. Se a contagem for 0, o usuário NÃO está inscrito no evento pai.
+        IF v_InscricaoPaiCount = 0 THEN
+            -- BLOQUEIA A INSERÇÃO e retorna um erro claro
+            RAISE EXCEPTION 'Inscrição bloqueada: O usuário (ID: %) deve estar inscrito no Evento principal (ID: %) antes de se inscrever na Atividade (ID: %).',
+            NEW.ID_Usuario, v_ID_Evento_Pai, NEW.ID_Registro;
+        END IF;
+        
+    END IF;
+
+    -- 6. Se a regra passou (ou se era um 'Evento'), permite a inserção
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- CRIAÇÃO DO TRIGGER
+CREATE TRIGGER trg_AntesDeInserirInscricao
+BEFORE INSERT ON TB_Inscricao
+FOR EACH ROW
+EXECUTE FUNCTION fn_VerificarInscricaoAtividade();

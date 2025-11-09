@@ -1,4 +1,4 @@
--- SCRIPT DE POPULAÇÃO 
+-- SCRIPT DE POPULAÇÃO V6
 
 TRUNCATE TABLE TB_Pagamento, TB_Certificado, TB_Inscricao, TB_Registro, TB_Usuario RESTART IDENTITY CASCADE;
 
@@ -44,6 +44,7 @@ BEGIN
     -- -----------------------------------------------------------------
     RAISE NOTICE '2. Criando 5 Eventos e Atividades variáveis (0-10)...';
     
+    -- AJUSTE: Coluna ST_Submissao e seus valores foram removidos daqui
     INSERT INTO TB_Registro (ID_EventoPai, TP_Registro, DS_Titulo, DS_Descricao, DS_Local, DH_Inicio, DH_Fim, TP_Area)
     VALUES 
         (NULL, 'Evento', 'Congresso de Tecnologia 2025', '...', 'Centro de Convenções A', '2025-10-20 09:00:00', '2025-10-22 18:00:00', 'TI'),
@@ -160,6 +161,7 @@ BEGIN
     RAISE NOTICE 'População de dados (v6) concluída com sucesso!';
 END $$;
 
+-- Verifica a contagem
 SELECT 'TB_Usuario' as Tabela, COUNT(*) FROM TB_Usuario
 UNION ALL
 SELECT 'TB_Registro', COUNT(*) FROM TB_Registro

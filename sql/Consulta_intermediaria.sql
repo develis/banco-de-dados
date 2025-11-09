@@ -1,4 +1,4 @@
-                                   -- CONSULTAS INTERMEDIÁRIAS (10 CONSULTAS)
+-- CONSULTAS INTERMEDIÁRIAS (10 CONSULTAS)
 -- Consultas intermediárias envolvem no mínimo 3 tabelas E devem utilizar pelo menos 2 das seguintes funções: JOIN, GROUP BY, WINDOW e COUNT.
 
 -- 1) Total de inscrições por usuário (apenas Eventos)

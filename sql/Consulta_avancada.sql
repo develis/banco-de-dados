@@ -1,6 +1,7 @@
-                                     -- CONSULTAS Avançadas (20 CONSULTAS)
+-- CONSULTAS Avançadas (20 CONSULTAS)
 -- Consultas avançadas envolvem no mínimo 3 tabelas E devem utilizar pelo menos 3 das seguintes funções: SUB-CONSULTAS, JOIN, GROUP BY, WINDOW e COUNT.
 
+ANALYZE;
 -- 1) Ranking de usuários por número de inscrições em eventos
 SELECT
   u.ds_nome AS nome_usuario,
@@ -276,6 +277,8 @@ JOIN
     tb_inscricao i ON i.id_inscricao = c.id_inscricao
 JOIN
     tb_registro r ON i.id_registro = r.id_registro
+WHERE
+	r.tp_registro = 'Evento'
 GROUP BY
     r.ds_titulo
 ORDER BY
