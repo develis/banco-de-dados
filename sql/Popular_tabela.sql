@@ -1,214 +1,170 @@
--- Limpa as tabelas na ordem correta para evitar conflitos de FK
--- CASCADE remove os registros dependentes (Pagamento/Certificado dependem de Inscricao, etc.)
+-- SCRIPT DE POPULAÇÃO V6 - Remoção de ST_Submissao
+--
+-- REGRAS IMPLEMENTADAS:
+-- 1. (Bloco 2) Coluna ST_Submissao removida do INSERT em TB_Registro.
+-- 2. (Bloco 3) Custo da inscrição em ATIVIDADE é sempre 0.00.
+-- 3. (Bloco 4) VL_ValorPago PODE SER MENOR que VL_CustoInscricao (lógica de desconto).
+
 TRUNCATE TABLE TB_Pagamento, TB_Certificado, TB_Inscricao, TB_Registro, TB_Usuario RESTART IDENTITY CASCADE;
 
--- Usamos um bloco anônimo (DO) para declarar variáveis e executar a lógica
 DO $$
 DECLARE
-    -- Variáveis para guardar os IDs dos eventos principais
-    v_evento_id_1 INT;
-    v_evento_id_2 INT;
+    -- Variáveis de LOOP
+    v_user_record RECORD;
+    v_activity_record RECORD;
+    v_event_id INT;
+    v_num_events_user INT;
+    v_num_activities_user INT;
     
-    -- Arrays para guardar os IDs das atividades de cada evento
-    v_atividades_e1 INT[];
-    v_atividades_e2 INT[];
+    -- Arrays para consulta rápida
+    v_all_event_ids INT[];
 BEGIN
 
     -- 1. POPULAR TB_Usuario (5.000 REGISTROS)
     -- -----------------------------------------------------------------
+    RAISE NOTICE '1. Criando 5.000 usuários...';
     INSERT INTO TB_Usuario (
-        CD_CPF, 
-        DS_Email, 
-        DS_Nome, 
-        DS_Instituicao, 
-        DS_Escolaridade
+        CD_CPF, DS_Email, DS_Nome, DS_Instituicao, DS_Escolaridade
     )
     SELECT
-        LPAD(s::text, 11, '0'), -- Gera CPFs únicos (ex: '00000000001')
-        'usuario' || s || '@exemplo.com', -- Gera emails únicos
-        'Nome Completo do Usuário ' || s,
-        -- Distribui usuários entre 4 instituições/escolaridades
-        (ARRAY['Universidade Federal da Bahia', 'Instituto Federal da Bahia', 'Universidade Católica', 'Universidade Estuadual da Bahia'])[1 + (s % 4)],
-        (ARRAY['Superior Incompleto', 'Superior Completo', 'Mestrado', 'Doutorado'])[1 + (s % 4)]
-    FROM generate_series(1, 5000) s; -- Gera 5.000 linhas
+        LPAD(s::text, 11, '0'),
+        'usuario' || s || '@exemplo.com',
+        'Nome ' || (ARRAY['Ana', 'Bruno', 'Carla', 'Diego', 'Elisa', 'Fábio', 'Gabriela'])[1 + floor(random() * 7)] || ' ' || (ARRAY['Silva', 'Souza', 'Pereira', 'Costa', 'Alves', 'Lima', 'Santos'])[1 + floor(random() * 7)] || ' ' || s,
+        CASE 
+            WHEN random() < 0.45 THEN 'Universidade Federal da Bahia'
+            WHEN random() < 0.75 THEN 'Instituto Federal da Bahia'
+            WHEN random() < 0.90 THEN 'Universidade Católica'
+            ELSE 'Universidade Estuadual da Bahia'
+        END,
+        CASE 
+            WHEN random() < 0.40 THEN 'Superior Incompleto'
+            WHEN random() < 0.75 THEN 'Superior Completo'
+            WHEN random() < 0.95 THEN 'Mestrado'
+            ELSE 'Doutorado'
+        END
+    FROM generate_series(1, 5000) s;
 
 
-    -- 2. POPULAR TB_Registro (Eventos e Atividades)
+    -- 2. POPULAR TB_Registro (5 Eventos e Atividades 0-10)
     -- -----------------------------------------------------------------
+    RAISE NOTICE '2. Criando 5 Eventos e Atividades variáveis (0-10)...';
     
-    -- Inserir Eventos Principais PRIMEIRO (ID_EventoPai = NULL)
-    INSERT INTO TB_Registro (ID_EventoPai, TP_Registro, DS_Titulo, DS_Descricao, DS_Local, DH_Inicio, DH_Fim, TP_Area, ST_Submissao)
-    VALUES (NULL, 'Evento', 'Congresso de Tecnologia 2025', 'Evento principal sobre inovação e TI.', 'Centro de Convenções A', '2025-10-20 09:00:00', '2025-10-22 18:00:00', 'TI', 'Fechado')
-    RETURNING ID_Registro INTO v_evento_id_1; -- Salva o ID gerado
-
-    INSERT INTO TB_Registro (ID_EventoPai, TP_Registro, DS_Titulo, DS_Descricao, DS_Local, DH_Inicio, DH_Fim, TP_Area, ST_Submissao)
-    VALUES (NULL, 'Evento', 'Semana Acadêmica de IA', 'Evento focado em Inteligência Artificial e Machine Learning.', 'Auditório Principal Reitoria', '2025-11-05 08:00:00', '2025-11-07 17:00:00', 'IA', 'Aberto')
-    RETURNING ID_Registro INTO v_evento_id_2; -- Salva o ID gerado
-
-    -- Inserir Atividades (filhas dos eventos)
-    -- 10 Atividades para o Evento 1
     INSERT INTO TB_Registro (ID_EventoPai, TP_Registro, DS_Titulo, DS_Descricao, DS_Local, DH_Inicio, DH_Fim, TP_Area)
-    SELECT 
-        v_evento_id_1,
-        'Atividade',
-        'Palestra E1 - Tópico ' || s,
-        'Descrição detalhada da atividade ' || s || ' do evento 1.',
-        'Sala ' || (100 + s),
-        '2025-10-20 10:00:00'::timestamp + (s * '1 hour'::interval),
-        '2025-10-20 11:00:00'::timestamp + (s * '1 hour'::interval),
-        'TI'
-    FROM generate_series(1, 10) s;
+    VALUES 
+        (NULL, 'Evento', 'Congresso de Tecnologia 2025', '...', 'Centro de Convenções A', '2025-10-20 09:00:00', '2025-10-22 18:00:00', 'TI'),
+        (NULL, 'Evento', 'Semana Acadêmica de IA', '...', 'Auditório Reitoria', '2025-11-05 08:00:00', '2025-11-07 17:00:00', 'IA'),
+        (NULL, 'Evento', 'Simpósio de Redes e Segurança', '...', 'Prédio de Engenharia', '2025-11-10 09:00:00', '2025-11-11 18:00:00', 'Redes'),
+        (NULL, 'Evento', 'Feira de Hardware e Robótica', '...', 'Ginásio de Esportes', '2025-11-15 10:00:00', '2025-11-16 17:00:00', 'Hardware'),
+        (NULL, 'Evento', 'Workshop de Lógica de Programação', '...', 'Laboratório 301', '2025-11-20 08:00:00', '2025-11-20 17:00:00', 'TI');
 
-    -- 10 Atividades para o Evento 2
-    INSERT INTO TB_Registro (ID_EventoPai, TP_Registro, DS_Titulo, DS_Descricao, DS_Local, DH_Inicio, DH_Fim, TP_Area)
-    SELECT 
-        v_evento_id_2,
-        'Atividade',
-        'Workshop E2 - Tópico ' || s,
-        'Descrição detalhada da atividade ' || s || ' do evento 2.',
-        'Sala ' || (200 + s),
-        '2025-11-05 09:00:00'::timestamp + (s * '2 hours'::interval),
-        '2025-11-05 11:00:00'::timestamp + (s * '2 hours'::interval),
-        'IA'
-    FROM generate_series(1, 10) s;
-    
-    -- Guarda os IDs das atividades recém-criadas nos arrays
-    v_atividades_e1 := ARRAY(SELECT ID_Registro FROM TB_Registro WHERE ID_EventoPai = v_evento_id_1);
-    v_atividades_e2 := ARRAY(SELECT ID_Registro FROM TB_Registro WHERE ID_EventoPai = v_evento_id_2);
+    v_all_event_ids := ARRAY(SELECT ID_Registro FROM TB_Registro WHERE TP_Registro = 'Evento');
+
+    FOR v_event_id IN SELECT * FROM unnest(v_all_event_ids) LOOP
+        v_num_activities_user := floor(random() * 11)::INT;
+        IF v_num_activities_user > 0 THEN
+            INSERT INTO TB_Registro (ID_EventoPai, TP_Registro, DS_Titulo, DS_Descricao, DS_Local, DH_Inicio, DH_Fim, TP_Area)
+            SELECT 
+                v_event_id, 'Atividade', 'Atividade Tópico ' || s, '...', 'Sala ' || (100 + s),
+                (SELECT DH_Inicio FROM TB_Registro WHERE ID_Registro = v_event_id) + (s * '1 hour'::interval),
+                (SELECT DH_Inicio FROM TB_Registro WHERE ID_Registro = v_event_id) + ((s + 1) * '1 hour'::interval),
+                (SELECT TP_Area FROM TB_Registro WHERE ID_Registro = v_event_id)
+            FROM generate_series(1, v_num_activities_user) s;
+        END IF;
+    END LOOP;
 
 
-    -- 3. POPULAR TB_Inscricao (5.000 REGISTROS)
+    -- 3. POPULAR TB_Inscricao (LÓGICA DINÂMICA)
     -- -----------------------------------------------------------------
-    -- Aqui, vamos criar 5.000 inscrições TOTAIS, respeitando a regra de negócio.
+    RAISE NOTICE '3. Inscrevendo usuários dinamicamente...';
     
-    -- Bloco 1: 1.500 usuários (1 a 1500) inscritos no Evento 1
-    INSERT INTO TB_Inscricao (ID_Registro, ID_Usuario, DH_DataInscricao, TP_Inscricao, ST_Pagamento, VL_CustoInscricao, ST_Presente)
-    SELECT 
-        v_evento_id_1,
-        s, -- ID_Usuario
-        NOW() - (s * '1 day'::interval), -- Datas de inscrição variadas
-        'Online',
-        (ARRAY['Pago', 'Pendente', 'Isento'])[1 + (s % 3)],
-        150.00,
-        (ARRAY[true, false])[1 + (s % 2)] -- Metade presente, metade ausente
-    FROM generate_series(1, 1500) s;
-
-    -- Bloco 2: 1.000 usuários (1 a 1000) inscritos em UMA atividade do Evento 1
-    -- (REGRA OK: Todos do Bloco 1 já estão no Evento 1)
-    INSERT INTO TB_Inscricao (ID_Registro, ID_Usuario, DH_DataInscricao, TP_Inscricao, ST_Pagamento, VL_CustoInscricao, ST_Presente)
-    SELECT 
-        v_atividades_e1[1 + (s % ARRAY_LENGTH(v_atividades_e1, 1))], -- Pega uma atividade aleatória (round-robin)
-        s, -- ID_Usuario
-        NOW() - (s * '1 day'::interval) + '1 hour'::interval, -- 1h depois da inscrição no evento
-        'Online',
-        'Isento', -- Atividades geralmente são isentas se o evento é pago
-        0.00,
-        (ARRAY[true, false])[1 + (s % 2)]
-    FROM generate_series(1, 1000) s;
-
-    -- Bloco 3: 1.500 usuários (1501 a 3000) inscritos no Evento 2
-    INSERT INTO TB_Inscricao (ID_Registro, ID_Usuario, DH_DataInscricao, TP_Inscricao, ST_Pagamento, VL_CustoInscricao, ST_Presente)
-    SELECT 
-        v_evento_id_2,
-        s, -- ID_Usuario
-        NOW() - (s * '1 day'::interval),
-        'Presencial',
-        (ARRAY['Pago', 'Pendente'])[1 + (s % 2)],
-        200.00,
-        (ARRAY[true, false, true])[1 + (s % 3)] -- 2/3 presentes
-    FROM generate_series(1501, 3000) s;
-
-    -- Bloco 4: 1.000 usuários (1501 a 2500) inscritos em UMA atividade do Evento 2
-    -- (REGRA OK: Todos do Bloco 3 já estão no Evento 2)
-    INSERT INTO TB_Inscricao (ID_Registro, ID_Usuario, DH_DataInscricao, TP_Inscricao, ST_Pagamento, VL_CustoInscricao, ST_Presente)
-    SELECT 
-        v_atividades_e2[1 + (s % ARRAY_LENGTH(v_atividades_e2, 1))],
-        s, -- ID_Usuario
-        NOW() - (s * '1 day'::interval) + '1 hour'::interval,
-        'Presencial',
-        'Isento',
-        0.00,
-        (ARRAY[true, false])[1 + (s % 2)]
-    FROM generate_series(1501, 2500) s;
+    FOR v_user_record IN SELECT ID_Usuario FROM TB_Usuario LOOP
     
-    -- TOTAL: 1500 (E1) + 1000 (Ativ E1) + 1500 (E2) + 1000 (Ativ E2) = 5.000 Inscrições
+        v_num_events_user := floor(random() * 4)::INT;
+        IF v_num_events_user > 0 THEN
+            FOR i IN 1..v_num_events_user LOOP
+                v_event_id := v_all_event_ids[1 + floor(random() * 5)];
+                
+                INSERT INTO TB_Inscricao (
+                    ID_Registro, ID_Usuario, DH_DataInscricao, TP_Inscricao, 
+                    ST_Pagamento, VL_CustoInscricao, ST_Presente
+                )
+                VALUES (
+                    v_event_id, v_user_record.ID_Usuario, NOW() - (random()*30 + 1) * '1 day'::interval, 
+                    (ARRAY['Online', 'Presencial'])[1 + floor(random()*2)],
+                    CASE WHEN random() < 0.6 THEN 'Pago' WHEN random() < 0.85 THEN 'Pendente' ELSE 'Isento' END,
+                    100 + (random()*100),
+                    random() < 0.65
+                )
+                ON CONFLICT (id_registro, id_usuario) DO NOTHING;
+
+                v_num_activities_user := floor(random() * 3)::INT;
+                IF v_num_activities_user > 0 THEN
+                    FOR v_activity_record IN 
+                        SELECT ID_Registro FROM TB_Registro 
+                        WHERE ID_EventoPai = v_event_id 
+                        ORDER BY random() 
+                        LIMIT v_num_activities_user 
+                    LOOP
+                        INSERT INTO TB_Inscricao (
+                            ID_Registro, ID_Usuario, DH_DataInscricao, TP_Inscricao, 
+                            ST_Pagamento, VL_CustoInscricao, ST_Presente
+                        )
+                        VALUES (
+                            v_activity_record.ID_Registro, v_user_record.ID_Usuario, NOW() - (random()*30 + 1) * '1 day'::interval,
+                            (ARRAY['Online', 'Presencial'])[1 + floor(random()*2)],
+                            'Isento', 
+                            0.00, -- Custo da Atividade é SEMPRE ZERO
+                            random() < 0.8
+                        )
+                        ON CONFLICT (id_registro, id_usuario) DO NOTHING;
+                    END LOOP;
+                END IF;
+            END LOOP;
+        END IF;
+    END LOOP;
 
 
-    -- Bloco 5 (NOVO): Criar interseção — usuários do Evento 1 também inscritos no Evento 2
-    -- 400 usuários: 201..600 também no Evento 2 (sem violar UK (ID_Registro, ID_Usuario))
-    INSERT INTO TB_Inscricao (ID_Registro, ID_Usuario, DH_DataInscricao, TP_Inscricao, ST_Pagamento, VL_CustoInscricao, ST_Presente)
-    SELECT
-        v_evento_id_2,
-        s,
-        NOW() - (s * '1 day'::interval) + '30 minutes'::interval,
-        'Online',
-        (ARRAY['Pago','Pendente'])[1 + (s % 2)],
-        200.00,
-        (ARRAY[true,false])[1 + (s % 2)]
-    FROM generate_series(201, 600) s;
-
-    -- Bloco 6 (NOVO): Criar interseção — usuários do Evento 2 também inscritos no Evento 1
-    -- 300 usuários: 1601..1900 também no Evento 1
-    INSERT INTO TB_Inscricao (ID_Registro, ID_Usuario, DH_DataInscricao, TP_Inscricao, ST_Pagamento, VL_CustoInscricao, ST_Presente)
-    SELECT
-        v_evento_id_1,
-        s,
-        NOW() - (s * '1 day'::interval) + '45 minutes'::interval,
-        'Presencial',
-        (ARRAY['Pago','Pendente'])[1 + (s % 2)],
-        150.00,
-        (ARRAY[true,false,true])[1 + (s % 3)]
-    FROM generate_series(1601, 1900) s;
-
-    -- Observação: As inserções de Pagamento (etapa 4) e Certificado (etapa 5) consideram TODAS as inscrições 'Pago' e 'ST_Presente = true',
-    -- portanto os registros novos acima já serão contemplados automaticamente.
-
-
-    -- 4. POPULAR TB_Pagamento
+    -- 4. POPULAR TB_Pagamento (COM LÓGICA DE DESCONTO)
     -- -----------------------------------------------------------------
-    -- Insere um pagamento para CADA inscrição que está com status 'Pago'
+    RAISE NOTICE '4. Gerando pagamentos (com descontos)...';
     INSERT INTO TB_Pagamento (
-        ID_Inscricao, 
-        DH_DataPagamento, 
-        VL_ValorPago, 
-        TP_MetodoPagamento, 
-        CD_Transacao
+        ID_Inscricao, DH_DataPagamento, VL_ValorPago, TP_MetodoPagamento, CD_Transacao
     )
     SELECT 
-        ID_Inscricao,
-        DH_DataInscricao + '2 hours'::interval, -- Pagou 2h depois de inscrever
-        VL_CustoInscricao,
-        (ARRAY['Cartão de Crédito', 'PIX', 'Boleto'])[1 + (ID_Usuario % 3)],
-        'TRX_' || MD5(ID_Inscricao::text || NOW()::text) -- Gera um código de transação
-    FROM 
-        TB_Inscricao
-    WHERE 
-        ST_Pagamento = 'Pago';
+        I.ID_Inscricao, 
+        I.DH_DataInscricao + (random() * 3 + 1) * '1 hour'::interval, 
+        (CASE 
+            WHEN random() < 0.7 THEN I.VL_CustoInscricao
+            WHEN random() < 0.9 THEN I.VL_CustoInscricao * 0.5
+            ELSE I.VL_CustoInscricao * 0.75
+        END)::DECIMAL(10,2) AS VL_ValorPago,
+        CASE         
+            WHEN random() < 0.5 THEN 'PIX' 
+            WHEN random() < 0.85 THEN 'Cartão de Crédito' 
+            ELSE 'Boleto' 
+        END,
+        'TRX_' || MD5(I.ID_Inscricao::text || NOW()::text)
+    FROM TB_Inscricao I
+    WHERE I.ST_Pagamento = 'Pago';
 
 
     -- 5. POPULAR TB_Certificado
     -- -----------------------------------------------------------------
-    -- Gera um certificado para CADA inscrição onde ST_Presente = true
+    RAISE NOTICE '5. Gerando certificados...';
     INSERT INTO TB_Certificado (
-        ID_Inscricao,
-        CD_Validacao,
-        DH_Emissao
+        ID_Inscricao, CD_Validacao, DH_Emissao
     )
     SELECT
         I.ID_Inscricao,
-        MD5(I.ID_Usuario::text || I.ID_Registro::text || R.DH_Fim::text), -- Gera código de validação
-        R.DH_Fim + '1 day'::interval -- Emite o certificado 1 dia após o fim do registro
-    FROM 
-        TB_Inscricao I
-    JOIN 
-        TB_Registro R ON I.ID_Registro = R.ID_Registro
-    WHERE 
-        I.ST_Presente = true;
+        MD5(I.ID_Usuario::text || I.ID_Registro::text || R.DH_Fim::text),
+        R.DH_Fim + '1 day'::interval
+    FROM TB_Inscricao I
+    JOIN TB_Registro R ON I.ID_Registro = R.ID_Registro
+    WHERE I.ST_Presente = true;
 
-    RAISE NOTICE 'População de dados sintéticos concluída com sucesso!';
+    RAISE NOTICE 'População de dados (v6) concluída com sucesso!';
 END $$;
 
--- Verifica a contagem
 SELECT 'TB_Usuario' as Tabela, COUNT(*) FROM TB_Usuario
 UNION ALL
 SELECT 'TB_Registro', COUNT(*) FROM TB_Registro
