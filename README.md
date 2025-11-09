@@ -1,4 +1,95 @@
-## Repositório - Banco de Dados (Trabalho de Disciplina)
+# Repositório - Banco de Dados (Trabalho de Disciplina)
+Eduardo Vitor dos Santos Silva e Silva, Elis Marcela de Souza Alcantara, Otávio Novais de Oliveira, Saulo Matos Pereira Gomes
+
+> Os triggers estão aplicados direto no script de criação, mas deixamos o código disponível em arquivos separados.
+
+## 🧑‍💻 Usuário
+
+Cada usuário é identificado por um **ID único** e possui:
+
+* **CPF**
+* **Nome**
+* **E-mail**
+* **Instituição**
+* **Escolaridade**
+
+### Relacionamentos
+
+* O usuário pode se inscrever em diversos **Registros** (Eventos ou Atividades).
+* O usuário pode **submeter Atividades** que serão apresentadas em um **Evento**.
+
+---
+
+## 📅 Registro
+
+Representa um **evento acadêmico** ou **atividade principal** organizada pela instituição.
+
+### Atributos
+
+* **Título**
+* **Tipo** (ex.: curso, palestra, seminário)
+* **Descrição**
+* **Área**
+* **Local**
+* **Data de início**
+* **Data de fim**
+
+### Relacionamentos
+
+* Pode existir uma relação hierárquica via **ID_EventoPai**, permitindo que um evento tenha **subeventos**.
+* Um **Registro** pode conter **múltiplas atividades**.
+* Usuários podem se inscrever em eventos mediante **pagamento**.
+
+---
+
+## 📝 Inscrição
+
+Registra a **participação de um usuário** em um evento.
+
+### Atributos
+
+* **Data da inscrição**
+* **Tipo** (ex.: isento, aluno, profissional)
+* **Custo**
+* **Status de pagamento**
+* **Presença do usuário** no evento
+
+### Relacionamentos
+
+* Cada inscrição está vinculada a um **usuário** e a um **evento (Registro)**.
+* Uma inscrição pode gerar um **Certificado**.
+
+---
+
+## 💳 Pagamento
+
+Cada pagamento está associado a uma **única inscrição**.
+
+### Atributos
+
+* **Data do pagamento**
+* **Valor pago**
+* **Método utilizado**
+* **Código da transação**
+
+### Função
+
+* Serve para **confirmar financeiramente** a inscrição do usuário no evento.
+
+---
+
+## 🎓 Certificado
+
+Emitido para **inscrições válidas e confirmadas**.
+
+### Atributos
+
+* **Código de validação**
+* **Data de emissão**
+
+### Função
+
+* Permite a **autenticação da participação** do usuário no evento por meio do **código fornecido**.
 
 ## Requisitos
 
