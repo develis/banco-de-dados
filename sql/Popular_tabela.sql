@@ -1,9 +1,4 @@
--- SCRIPT DE POPULAÇÃO V6 - Remoção de ST_Submissao
---
--- REGRAS IMPLEMENTADAS:
--- 1. (Bloco 2) Coluna ST_Submissao removida do INSERT em TB_Registro.
--- 2. (Bloco 3) Custo da inscrição em ATIVIDADE é sempre 0.00.
--- 3. (Bloco 4) VL_ValorPago PODE SER MENOR que VL_CustoInscricao (lógica de desconto).
+-- SCRIPT DE POPULAÇÃO 
 
 TRUNCATE TABLE TB_Pagamento, TB_Certificado, TB_Inscricao, TB_Registro, TB_Usuario RESTART IDENTITY CASCADE;
 
